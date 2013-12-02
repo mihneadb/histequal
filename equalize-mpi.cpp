@@ -1,3 +1,4 @@
+#include <mpi.h>
 #include "CImg.h"
 using namespace cimg_library;
 
@@ -129,14 +130,58 @@ void equalize_channel(CImg<unsigned char> &img, int channel)
 
 int main(int argc, char **argv)
 {
-    CImg<unsigned char> img("img.jpg");
+    MPI_Init(&argc, &argv);
 
-    equalize_channel(img, RED);
-    equalize_channel(img, GREEN);
-    equalize_channel(img, BLUE);
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    img.save("img-out.jpg");
+    int channels[] = {-1, RED, GREEN, BLUE};
 
+    if (rank == 0) {
+        CImg<unsigned char> img("img.jpg");
+
+        int width = img.width();
+        int height = img.height();
+        int size = width * height * 3;
+        MPI_Bcast(&width, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        MPI_Bcast(&height, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        MPI_Bcast(img.data(), size, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+
+
+        // receive the 3 channels
+        MPI_Status status;
+
+        int i;
+        for (i = 1; i < 4; ++i) {
+            MPI_Recv(img.data() + width * height * (i - 1), width * height,
+                    MPI_UNSIGNED_CHAR, i, i - 1, MPI_COMM_WORLD, &status);
+        }
+        img.save("img-out.jpg");
+    } else {
+        int size;
+        int width, height;
+
+        int channel = channels[rank];
+
+        MPI_Bcast(&width, 1, MPI_INT, 0, MPI_COMM_WORLD);
+        MPI_Bcast(&height, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+        size = width * height * 3;
+
+        unsigned char *data = (unsigned char *) malloc(size * sizeof(unsigned char));
+        MPI_Bcast(data, size, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+
+        CImg<unsigned char> img(data, width, height, 1, 3);
+
+        equalize_channel(img, channel);
+
+        // send back only own channel
+        MPI_Send(img.data() + width * height * channel, width * height,
+                MPI_UNSIGNED_CHAR, 0, channel, MPI_COMM_WORLD);
+    }
+
+
+    MPI_Finalize();
     return 0;
 }
 
