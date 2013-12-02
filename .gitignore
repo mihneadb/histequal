@@ -1,3 +1,9 @@
+img-out.jpg
+omp
+serial
+mpi
+
+
 # Object files
 *.o
 *.ko
