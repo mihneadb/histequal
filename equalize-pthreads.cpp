@@ -111,14 +111,14 @@ struct args {
     int channel;
 };
 
-void equalize_channel(void *a)
+void *equalize_channel(void *a)
 {
-    CImg<unsigned char> img = *(((struct args*)a)->img);
+    CImg<unsigned char> *img = ((struct args*)a)->img;
     int channel = ((struct args*)a)->channel;
-    int width = img.width();
-    int height = img.height();
+    int width = img->width();
+    int height = img->height();
 
-    std::map<unsigned char, float> hist = make_hist(img, channel);
+    std::map<unsigned char, float> hist = make_hist(*img, channel);
     std::map<unsigned char, int> cdf = make_cdf(hist, width * height);
     int cdfmin = cdf_min(cdf);
     std::map<unsigned char, unsigned char> transform = make_transform(cdfmin,
@@ -128,29 +128,34 @@ void equalize_channel(void *a)
     unsigned char val;
     for (x = 0; x < width; ++x) {
         for (y = 0; y < height; ++y) {
-            val = img(x, y, channel);
-            img(x, y, channel) = transform[val];
+            val = (*img)(x, y, channel);
+            (*img)(x, y, channel) = transform[val];
         }
     }
+    return NULL;
 }
 
 
 int main(int argc, char **argv)
 {
-    CImg<unsigned char> img("img.jpg");
+    CImg<unsigned char> *img = new CImg<unsigned char>("img.jpg");
 
     int channels[] = {RED, GREEN, BLUE};
     int rank;
     pthread_t threads[3];
-    struct args a;
 
     for (rank = 0; rank < 3; ++rank) {
-        args.img = &img;
-        args.channel = channels[rank];
-        pthread_create(&threads[rank], NULL, equalize_channel, (void *)&args);
+        struct args *a = new struct args;
+        a->img = img;
+        a->channel = channels[rank];
+        pthread_create(&threads[rank], NULL, equalize_channel, a);
     }
 
-    img.save("img-out.jpg");
+    for (rank = 0; rank < 3; ++rank) {
+        pthread_join(threads[rank], NULL);
+    }
+
+    img->save("img-out.jpg");
 
     return 0;
 }

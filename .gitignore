@@ -2,6 +2,7 @@ img-out.jpg
 omp
 serial
 mpi
+pthreads
 
 
 # Object files
